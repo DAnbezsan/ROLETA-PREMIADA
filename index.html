@@ -69,8 +69,8 @@
       // WARNING: Em produção, a chave secreta NÃO deve ser exposta diretamente no frontend!
       // Considere usar um proxy de backend para lidar com chaves de API com segurança.
       // ==========================================================
-      window.JSONBIN_BIN_ID = "69100d6043b1c97be9a1c6b9"; // <<<<<<<<<<<<<<<< SEU ID DO BIN AQUI
-      window.JSONBIN_SECRET_KEY = "$2a$10$RxtN.VwYLRsGcmoCji08oeL2di9W0D4tyrBZe/vIV77N665ALQ9Vi"; // <<<<<<<<<<<< SUA MASTER KEY AQUI
+      window.JSONBIN_BIN_ID = "69101dc5ae596e708f4d9234"; // <<<<<<<<<<<<<<<< SEU ID DO BIN AQUI!
+      window.JSONBIN_SECRET_KEY = "$2a$10$RxtN.VwYLRsGcmoCji08oeL2di9W0D4tyrBZe/vIV77N665ALQ9Vi"; // <<<<<<<<<<<< SUA MASTER KEY AQUI!
     </script>
 
     <script type="text/babel">
@@ -138,7 +138,7 @@
       const JSONBIN_SECRET_KEY = window.JSONBIN_SECRET_KEY || "YOUR_DEFAULT_SECRET_KEY"; 
       // --- END OF CONSTANTS ---
 
-      // --- START OF SPINNER MARKER COMPONENT (consolidated) ---
+      // --- START OF SPINNER MARKER COMPONENT (consolidated from components/SpinnerMarker.tsx) ---
       const SpinnerMarker = () => {
         return (
           <div className="absolute -top-3 md:-top-4 left-1/2 -translate-x-1/2 z-10" style={{ filter: 'drop-shadow(0 6px 8px rgba(0,0,0,0.5))' }}>
@@ -158,7 +158,7 @@
       };
       // --- END OF SPINNER MARKER COMPONENT ---
 
-      // --- START OF SPINNER WHEEL COMPONENT (consolidated) ---
+      // --- START OF SPINNER WHEEL COMPONENT (consolidated from components/SpinnerWheel.tsx) ---
       const SpinnerWheel = ({ prizes, rotation, spinDuration }) => {
         const numPrizes = prizes.length;
         const anglePerSegment = 360 / numPrizes;
@@ -243,7 +243,7 @@
       };
       // --- END OF SPINNER WHEEL COMPONENT ---
 
-      // --- START OF PRIZE MODAL COMPONENT (consolidated) ---
+      // --- START OF PRIZE MODAL COMPONENT (consolidated from components/PrizeModal.tsx) ---
       const PrizeModal = ({ isOpen, prize, onClose, userName, userPhone }) => {
         if (!isOpen || !prize) return null;
 
@@ -583,7 +583,7 @@
                 setWinnersList(prev => [...(prev || []), {name: userName, phone: userPhone, prizeName: winningPrize.name}]);
             }
           }, SPIN_DURATION_MS + 200);
-        }, [isSpinning, userName, userPhone, currentIndex, usedPhones, winnersList, isSyncing]);
+        }, [isSpinning, userName, userPhone, currentIndex, usedPhones, winnersList, isSyncing]); // Added isSyncing to dependencies
 
         const handleSpinClick = () => {
           // Block spin if global state is not fully loaded/synced
