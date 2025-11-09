@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎰</text></svg>">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roleta Premiada Interativa</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -13,25 +14,24 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-      /* Estilos Globais e Animações */
+      /* Global styles and animations */
       body {
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        background-color: #000;
         margin: 0;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
           'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
           sans-serif;
       }
-      
-      @keyframes spin-lights { 
-        from{ transform: rotate(0deg); } 
-        to{ transform: rotate(360deg); } 
+
+      @keyframes spin-lights {
+        from{ transform: rotate(0deg); }
+        to{ transform: rotate(360deg); }
       }
       .casino-lights::before, .casino-lights::after {
-        content: ""; 
-        position: absolute; 
-        inset: -4px; 
+        content: "";
+        position: absolute;
+        inset: -4px;
         border-radius: 50%;
         background: conic-gradient(from 0deg, rgba(255,215,0,0.95) 0 12deg, transparent 12deg 36deg);
         mask: radial-gradient(closest-side, transparent 0 95%, black 96%);
@@ -43,13 +43,13 @@
         opacity: 0.7;
         filter: blur(4px) saturate(1.2);
       }
-      
+
       @keyframes fade-in-down {
         0% { opacity: 0; transform: translateY(-20px); }
         100% { opacity: 1; transform: translateY(0); }
       }
       .animate-fade-in-down { animation: fade-in-down 0.5s ease-out forwards; }
-      
+
       @keyframes fade-in-scale {
         0% { opacity: 0; transform: scale(0.8); }
         100% { opacity: 1; transform: scale(1); }
@@ -57,14 +57,71 @@
       .animate-fade-in-scale {
         animation: fade-in-scale 0.3s ease-out forwards;
       }
+
+      /* Forcing scrollbar styling on Webkit browsers */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #1a1a1a;
+        border-radius: 10px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #ffd700;
+        border-radius: 10px;
+        border: 2px solid #1a1a1a;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #ffdb4d;
+      }
     </style>
 </head>
-<body>
+<body class="bg-black text-white antialiased">
     <noscript>Você precisa habilitar o JavaScript para rodar esta aplicação.</noscript>
     <div id="root"></div>
 
     <script type="text/babel">
+      const { useState, useCallback, useEffect } = React;
+
+      // --- START OF ENVIRONMENT VARIABLES ---
+      // IMPORTANT: Replace these with your actual jsonbin.io ID and API key, and WhatsApp numbers.
+      const JSONBIN_BIN_ID = '69101dc5ae596e708f4d9234'; // e.g., '65e315b8dc74654018b10f00'
+      const JSONBIN_API_KEY = '$2a$10$RxtN.VwYLRsGcmoCji08oeL2di9W0D4tyrBZe/vIV77N665ALQ9Vi'; // e.g., '$2a$10$eYd4gYc7hZkL2mXp3qR4sO5tU6vW7xY8z.A1B2C3D4E5F6G7H8I9J0K'
+      const OWNER_WHATSAPP = "5577981633924"; // E.g., "5577981633924" (country code + DDD + number)
+      const ADMIN_PHONE = "77998652620"; // E.g., "77998652620" (admin's phone number, can spin multiple times)
+      // --- END OF ENVIRONMENT VARIABLES ---
+
+      // --- START OF TYPES (For clarity, these are comments/JSDoc types as there's no runtime TS in Babel standalone) ---
+      /**
+       * @typedef {object} Prize
+       * @property {number} id
+       * @property {string} name
+       * @property {string} emoji
+       */
+
+      /**
+       * @typedef {object} ClaimedPrize
+       * @property {number} sequenceIndex - Index in the originalPrizesSequence
+       * @property {number} prizeId
+       * @property {string} prizeName
+       * @property {string} emoji
+       * @property {string} userPhone
+       * @property {string} timestamp - ISO string
+       */
+
+      /**
+       * @typedef {object} GlobalPrizeState
+       * @property {number} nextAvailableIndex
+       * @property {string[]} originalPrizesSequence - Names of prizes in sequence
+       * @property {ClaimedPrize[]} claimedPrizes
+       */
+      // --- END OF TYPES ---
+
       // --- START OF CONSTANTS ---
+      /** @type {Prize[]} */
       const PRIZES = [
         { id: 1, name: 'DESIGN 50%', emoji: '🎉' },
         { id: 2, name: 'FIO A FIO 50%', emoji: '✨' },
@@ -74,33 +131,63 @@
         { id: 6, name: 'SHADOWL 100%', emoji: '🏆' },
       ];
 
-      const PRIZES_SEQUENCE = [
-        'DESIGN 50%','DESIGN 50%','DESIGN 50%','DESIGN 50%','DESIGN 50%',
-        'FIO A FIO 50%','FIO A FIO 50%','FIO A FIO 50%',
-        'DESIGN 50%','DESIGN 50%','DESIGN 50%','DESIGN 50%','DESIGN 50%',
-        'SHADOWL 50%','SHADOWL 50%',
-        'DESIGN 50%','DESIGN 50%','DESIGN 50%','DESIGN 50%','DESIGN 50%',
-        'FIO A FIO 50%','FIO A FIO 50%','FIO A FIO 50%',
-        'DESIGN 50%','DESIGN 50%','DESIGN 50%',
-        'FIO A FIO 50%','FIO A FIO 50%',
-        'SHADOWL 100%',
-        'DESIGN 100%','DESIGN 100%',
-        'DESIGN 50%','DESIGN 50%',
-        'SHADOWL 50%','SHADOWL 50%',
-        'FIO A FIO 100%',
-        'FIO A FIO 50%','FIO A FIO 50%',
-        'DESIGN 100%','DESIGN 100%','DESIGN 100%',
-        'SHADOWL 50%',
-        'DESIGN 100%','DESIGN 100%',
-        'FIO A FIO 100%',
-        'SHADOWL 100%',
-        'FIO A FIO 100%'
-      ];
-
       const SPIN_DURATION_MS = 4200;
-      const OWNER_WHATSAPP = "5577981633924";
-      const ADMIN_PHONE = "77998652620";
       // --- END OF CONSTANTS ---
+
+      // --- START OF JSONBIN SERVICE ---
+      const BASE_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
+
+      /**
+       * @template T
+       * @param {string} url
+       * @param {string} method
+       * @param {any} [data]
+       * @returns {Promise<T>}
+       */
+      async function request(url, method, data) {
+        if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) {
+          throw new Error('JSONBIN_BIN_ID and JSONBIN_API_KEY environment variables must be set.');
+        }
+
+        const headers = {
+          'Content-Type': 'application/json',
+          'X-Master-Key': JSONBIN_API_KEY,
+        };
+
+        const config = {
+          method,
+          headers,
+          body: data ? JSON.stringify(data) : undefined,
+        };
+
+        const response = await fetch(url, config);
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          console.error(`jsonbin.io API error (${method} ${url}): ${response.status} - ${errorBody}`);
+          throw new Error(`jsonbin.io API request failed: ${response.statusText} (${response.status})`);
+        }
+
+        return response.json();
+      }
+
+      /**
+       * @returns {Promise<GlobalPrizeState>}
+       */
+      async function fetchPrizeState() {
+        const result = await request(BASE_URL, 'GET');
+        return result.record;
+      }
+
+      /**
+       * @param {GlobalPrizeState} newState
+       * @returns {Promise<GlobalPrizeState>}
+       */
+      async function updatePrizeState(newState) {
+        const result = await request(BASE_URL, 'PUT', newState);
+        return result.record;
+      }
+      // --- END OF JSONBIN SERVICE ---
 
       // --- START OF SPINNER MARKER COMPONENT ---
       const SpinnerMarker = () => {
@@ -131,6 +218,12 @@
       // --- END OF SPINNER MARKER COMPONENT ---
 
       // --- START OF SPINNER WHEEL COMPONENT ---
+      /**
+       * @param {object} props
+       * @param {Prize[]} props.prizes
+       * @param {number} props.rotation
+       * @param {number} props.spinDuration
+       */
       const SpinnerWheel = ({ prizes, rotation, spinDuration }) => {
         const numPrizes = prizes.length;
         const anglePerSegment = 360 / numPrizes;
@@ -237,21 +330,32 @@
       // --- END OF SPINNER WHEEL COMPONENT ---
 
       // --- START OF PRIZE MODAL COMPONENT ---
+      /**
+       * @param {object} props
+       * @param {boolean} props.isOpen
+       * @param {Prize | null} props.prize
+       * @param {function} props.onClose
+       * @param {string | null} props.userPhone
+       */
       const PrizeModal = ({ isOpen, prize, onClose, userPhone }) => {
         if (!isOpen || !prize) return null;
 
         const handleWhatsAppShare = () => {
-          const message = `🎉 Olá! Ganhei na Roleta Premiada!\n🏆 Prêmio: ${prize.name}\n📱 Telefone: ${userPhone}`;
-          const whatsappUrl = `https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent(message)}`;
-          window.open(whatsappUrl, "_blank");
+          if (userPhone && OWNER_WHATSAPP) {
+            const message = `🎉 Olá! Ganhei na Roleta Premiada!\n🏆 Prêmio: ${prize.name}\n📱 Telefone: ${userPhone}`;
+            const whatsappUrl = `https://wa.me/${OWNER_WHATSAPP}?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, "_blank");
+          } else {
+            console.error("OWNER_WHATSAPP ou userPhone não configurados.");
+          }
         };
 
         return (
-          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose} role="dialog" aria-modal="true">
+          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="prize-modal-title">
             <div className="relative bg-gradient-to-br from-gray-900 to-black rounded-2xl shadow-2xl p-8 text-center border-2 border-amber-500 animate-fade-in-scale w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
               <p className="text-2xl text-gray-400 mb-2">Parabéns! Você ganhou:</p>
               <div className="text-8xl my-6 animate-bounce">{prize.emoji}</div>
-              <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-500 to-amber-400 mb-6" style={{ textShadow: '0 0 12px rgba(255,215,0,0.25)' }}>
+              <h2 id="prize-modal-title" className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-500 to-amber-400 mb-6" style={{ textShadow: '0 0 12px rgba(255,215,0,0.25)' }}>
                 {prize.name}
               </h2>
               {userPhone && OWNER_WHATSAPP && (
@@ -269,138 +373,352 @@
       };
       // --- END OF PRIZE MODAL COMPONENT ---
 
-      // --- START OF APP COMPONENT ---
-      const App = () => {
-        const { useState, useCallback, useEffect } = React;
+      // --- START OF PHONE MODAL COMPONENT ---
+      /**
+       * @param {object} props
+       * @param {boolean} props.isOpen
+       * @param {function(string): void} props.onSave
+       * @param {function(): void} props.onClose
+       */
+      const PhoneModal = ({ isOpen, onSave, onClose }) => {
+        const [phone, setPhone] = useState('');
+        const [error, setError] = useState('');
 
-        const PhoneModal = ({ isOpen, onSave, onClose }) => {
-          const [phone, setPhone] = useState('');
-          const [error, setError] = useState('');
-          if (!isOpen) return null;
+        if (!isOpen) return null;
 
-          const handleSave = () => {
-            const raw = phone.trim().replace(/\D/g, '');
-            if (!/^\d{10,13}$/.test(raw)) {
-              setError('Digite um telefone válido (somente dígitos, 10–13 caracteres)');
-              return;
-            }
-            setError('');
-            onSave(raw);
-          };
+        const handleSave = () => {
+          const raw = phone.trim().replace(/\D/g, '');
+          if (!/^\d{10,13}$/.test(raw)) {
+            setError('Digite um telefone válido (somente dígitos, 10–13 caracteres)');
+            return;
+          }
+          setError('');
+          onSave(raw);
+          setPhone(''); // Clear phone input after saving
+        };
 
-          const handleClose = () => {
-            setPhone('');
-            setError('');
-            onClose();
-          };
+        const handleClose = () => {
+          setPhone('');
+          setError('');
+          onClose();
+        };
 
-          return (
-            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={handleClose} role="dialog" aria-modal="true">
-              <div className="relative bg-gradient-to-br from-gray-900 to-black rounded-2xl shadow-2xl p-8 text-center border-2 border-amber-500 animate-fade-in-scale w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-2xl font-bold text-white mb-4">Informe seu telefone para girar</h3>
-                <input id="phoneInput" type="tel" placeholder="DDD + número (somente dígitos)" maxLength={15} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full px-4 py-3 bg-gray-800 text-white border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-2 text-center" aria-label="Número de telefone"/>
-                {error && <p className="text-red-400 text-sm mb-4" role="alert">{error}</p>}
-                <div className="flex justify-center gap-4 mt-4">
-                  <button onClick={handleSave} className="px-6 py-2 text-lg font-semibold text-black bg-gradient-to-br from-amber-400 to-yellow-500 rounded-lg shadow-md hover:from-amber-500 hover:to-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-400 transition-all duration-300">Salvar</button>
-                  <button onClick={handleClose} className="px-6 py-2 text-lg font-semibold text-white bg-gray-700 rounded-lg shadow-md hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-500 transition-colors duration-300">Cancelar</button>
-                </div>
-                <p className="text-sm text-gray-400 mt-6">Após salvar, clique em <strong>GIRAR</strong> novamente para iniciar o sorteio.</p>
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={handleClose} role="dialog" aria-modal="true" aria-labelledby="phone-modal-title">
+            <div className="relative bg-gradient-to-br from-gray-900 to-black rounded-2xl shadow-2xl p-8 text-center border-2 border-amber-500 animate-fade-in-scale w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+              <h3 id="phone-modal-title" className="text-2xl font-bold text-white mb-4">Informe seu telefone para girar</h3>
+              <input
+                id="phoneInput"
+                type="tel"
+                placeholder="DDD + número (somente dígitos)"
+                maxLength={15}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                className="w-full px-4 py-3 bg-gray-800 text-white border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-2 text-center"
+                aria-label="Número de telefone"
+              />
+              {error && <p className="text-red-400 text-sm mb-4" role="alert">{error}</p>}
+              <div className="flex justify-center gap-4 mt-4">
+                <button onClick={handleSave} className="px-6 py-2 text-lg font-semibold text-black bg-gradient-to-br from-amber-400 to-yellow-500 rounded-lg shadow-md hover:from-amber-500 hover:to-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-400 transition-all duration-300">Salvar</button>
+                <button onClick={handleClose} className="px-6 py-2 text-lg font-semibold text-white bg-gray-700 rounded-lg shadow-md hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-500 transition-colors duration-300">Cancelar</button>
               </div>
+              <p className="text-sm text-gray-400 mt-6">Após salvar, clique em <strong>GIRAR</strong> novamente para iniciar o sorteio.</p>
+            </div>
+          </div>
+        );
+      };
+      // --- END OF PHONE MODAL COMPONENT ---
+
+      // --- START OF WINNERS LIST COMPONENT ---
+      /**
+       * @param {object} props
+       * @param {ClaimedPrize[]} props.claimedPrizes
+       */
+      const WinnersList = ({ claimedPrizes }) => {
+        if (claimedPrizes.length === 0) {
+          return (
+            <div className="text-center text-gray-500 text-lg mt-8 p-4 bg-gray-900 rounded-lg max-w-md mx-auto">
+              Nenhum prêmio foi reivindicado ainda. Seja o primeiro!
             </div>
           );
-        };
+        }
 
-        const getLocalStorageItem = (key, defaultValue) => {
-          try {
-            const item = window.localStorage.getItem(key);
-            return item ? JSON.parse(item) : defaultValue;
-          } catch (error) {
-            console.warn(`Erro ao ler a chave do localStorage “${key}”:`, error);
-            return defaultValue;
-          }
-        };
+        return (
+          <div className="mt-8 p-6 bg-gradient-to-br from-gray-900 to-black rounded-2xl shadow-xl border-2 border-amber-500 w-full max-w-2xl mx-auto">
+            <h3 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-500 to-amber-400 text-center mb-6" style={{ textShadow: '0 0 8px rgba(255,215,0,0.2)' }}>
+              Ganhadores Recentes
+            </h3>
+            <div className="max-h-80 overflow-y-auto custom-scrollbar pr-2">
+              <ul className="space-y-4">
+                {claimedPrizes.slice().reverse().map((claimed, index) => { // Reverse to show latest first
+                  const prize = PRIZES.find(p => p.id === claimed.prizeId);
+                  const displayPhone = claimed.userPhone ?
+                    `+${claimed.userPhone.substring(0, 2)} (${claimed.userPhone.substring(2, 4)}) ${claimed.userPhone.substring(4, 9)}-X${claimed.userPhone.substring(claimed.userPhone.length - 3)}`
+                    : 'N/A';
+                  const date = new Date(claimed.timestamp).toLocaleDateString('pt-BR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                  });
 
+                  return (
+                    <li key={claimed.timestamp + claimed.userPhone} className="bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between animate-fade-in-down" style={{animationDelay: `${index * 0.05}s`}}>
+                      <div className="flex items-center">
+                        <span className="text-3xl mr-3">{prize?.emoji || '✨'}</span>
+                        <div>
+                          <p className="text-xl font-semibold text-amber-300">{claimed.prizeName}</p>
+                          <p className="text-sm text-gray-400">
+                            <span className="font-medium text-gray-300">{displayPhone}</span>
+                            <span className="ml-2 text-gray-500">{date}</span>
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            </div>
+          </div>
+        );
+      };
+      // --- END OF WINNERS LIST COMPONENT ---
+
+      // --- START OF APP COMPONENT ---
+      const LoadingOverlay = ({ message }) => (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[100] p-4 text-center">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-amber-500 mb-4"></div>
+            <p className="text-white text-xl md:text-2xl font-semibold">{message}</p>
+            <p className="text-gray-400 text-sm mt-2">Por favor, aguarde...</p>
+          </div>
+        </div>
+      );
+
+      const App = () => {
         const [isSpinning, setIsSpinning] = useState(false);
         const [rotation, setRotation] = useState(0);
+        /** @type {Prize | null} */
         const [wonPrize, setWonPrize] = useState(null);
         const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
-        const [userPhone, setUserPhone] = useState(() => getLocalStorageItem('wheelPhone', null));
-        const [currentIndex, setCurrentIndex] = useState(() => getLocalStorageItem('currentIndex', 0));
-        const [usedPhones, setUsedPhones] = useState(() => getLocalStorageItem('usedPhones', []));
+        const [userPhone, setUserPhone] = useState(() => {
+          try {
+            const storedPhone = window.localStorage.getItem('wheelPhone');
+            return storedPhone ? JSON.parse(storedPhone) : null;
+          } catch (e) {
+            console.error('Failed to parse user phone from localStorage', e);
+            return null;
+          }
+        });
+        /** @type {GlobalPrizeState | null} */
+        const [globalPrizeState, setGlobalPrizeState] = useState(null);
+        const [isLoadingGlobalState, setIsLoadingGlobalState] = useState(true);
+        const [error, setError] = useState(null);
         const [notification, setNotification] = useState(null);
 
-        useEffect(() => {
+        const showNotification = useCallback((message) => {
+          setNotification(message);
+          setTimeout(() => setNotification(null), 3000);
+        }, []);
+
+        const loadGlobalState = useCallback(async () => {
+          setIsLoadingGlobalState(true);
+          setError(null);
           try {
-            window.localStorage.setItem('currentIndex', JSON.stringify(currentIndex));
-            window.localStorage.setItem('usedPhones', JSON.stringify(usedPhones));
+            const state = await fetchPrizeState();
+            setGlobalPrizeState(state);
+          } catch (err) {
+            console.error("Erro ao carregar estado global da roleta:", err);
+            setError(`Falha ao carregar a roleta: ${err.message || 'Erro desconhecido'}. Por favor, recarregue a página.`);
+          } finally {
+            setIsLoadingGlobalState(false);
+          }
+        }, []);
+
+        useEffect(() => {
+          loadGlobalState();
+        }, [loadGlobalState]);
+
+        useEffect(() => {
+          // Save userPhone to localStorage
+          try {
             if (userPhone) {
               window.localStorage.setItem('wheelPhone', JSON.stringify(userPhone));
             } else {
               window.localStorage.removeItem('wheelPhone');
             }
           } catch (error) {
-            console.error('Erro ao salvar no localStorage', error);
+            console.error('Erro ao salvar telefone no localStorage', error);
           }
-        }, [currentIndex, usedPhones, userPhone]);
+        }, [userPhone]);
 
-        const showNotification = (message) => {
-          setNotification(message);
-          setTimeout(() => setNotification(null), 3000);
-        };
+        const startSpin = useCallback(async () => {
+          if (isSpinning || !userPhone || !globalPrizeState) return;
 
-        const startSpin = useCallback(() => {
-          if (isSpinning || !userPhone) return;
-          if (userPhone !== ADMIN_PHONE && usedPhones.includes(userPhone)) {
-            alert('Este número de telefone já participou da promoção.');
-            return;
-          }
           setIsSpinning(true);
-          const targetPrizeName = PRIZES_SEQUENCE[currentIndex % PRIZES_SEQUENCE.length];
-          const winningPrize = PRIZES.find(p => p.name === targetPrizeName);
-          const winningPrizeIndex = PRIZES.findIndex(p => p.name === targetPrizeName);
+          setError(null); // Clear previous errors
 
-          if (!winningPrize || winningPrizeIndex < 0) {
-            console.error("Prêmio não encontrado para o nome da sequência:", targetPrizeName);
+          // Store the state right before the spin for optimistic concurrency check later
+          const stateBeforeSpin = globalPrizeState;
+
+          const currentNextAvailableIndex = stateBeforeSpin.nextAvailableIndex;
+
+          if (currentNextAvailableIndex >= stateBeforeSpin.originalPrizesSequence.length) {
+            showNotification('Todos os prêmios já foram reivindicados! 😥');
             setIsSpinning(false);
             return;
           }
-          
+
+          const targetPrizeName = stateBeforeSpin.originalPrizesSequence[currentNextAvailableIndex];
+          const winningPrize = PRIZES.find(p => p.name === targetPrizeName);
+
+          if (!winningPrize) {
+            console.error("Prêmio não encontrado para o nome da sequência:", targetPrizeName);
+            setError("Erro interno: Prêmio não configurado. Tente novamente.");
+            setIsSpinning(false);
+            return;
+          }
+
+          const winningPrizeIndex = PRIZES.findIndex(p => p.name === targetPrizeName);
+          if (winningPrizeIndex < 0) {
+            // Fallback if winningPrize was found but not in PRIZES array (should not happen with find above)
+            console.error("Índice do prêmio não encontrado na lista de PRIZES:", targetPrizeName);
+            setError("Erro interno ao determinar o prêmio. Tente novamente.");
+            setIsSpinning(false);
+            return;
+          }
+
           const segmentAngle = 360 / PRIZES.length;
-          const winningAngle = 360 - (winningPrizeIndex * segmentAngle + segmentAngle / 2);
-          const randomRotations = 5 + Math.floor(Math.random() * 3);
+          // Calculate rotation to land exactly on the winning segment, plus some full rotations
+          // Adjusting for the wheel's -90deg initial rotation for SVG text path alignment
+          const winningAngle = 360 - (winningPrizeIndex * segmentAngle + segmentAngle / 2); // Center of the segment
+          const randomRotations = 5 + Math.floor(Math.random() * 3); // Ensure multiple full spins
           const finalRotation = 360 * randomRotations + winningAngle;
 
           setRotation(prev => prev + finalRotation);
 
-          setTimeout(() => {
-            setWonPrize(winningPrize);
-            setIsSpinning(false);
-            setCurrentIndex(prev => prev + 1);
-            if (userPhone !== ADMIN_PHONE) {
-              setUsedPhones(prev => [...prev, userPhone]);
+          setTimeout(async () => {
+            try {
+              // Optimistic concurrency check: Fetch the latest state again before attempting to update
+              const latestState = await fetchPrizeState();
+              if (latestState.nextAvailableIndex !== stateBeforeSpin.nextAvailableIndex) {
+                // Another user claimed this prize while we were spinning
+                showNotification('Ops! Este prêmio já foi reivindicado por outro participante. Gire novamente! 🎰');
+                loadGlobalState(); // Reload the state to reflect changes
+                setWonPrize(null); // Ensure modal doesn't show an already claimed prize
+                return;
+              }
+
+              // Check if the current user already claimed this specific index (admin only bypass)
+              if (userPhone !== ADMIN_PHONE &&
+                  latestState.claimedPrizes.some(
+                      cp => cp.userPhone === userPhone && cp.sequenceIndex === currentNextAvailableIndex
+                  )) {
+                  showNotification('Você já reivindicou este prêmio. Gire novamente para o próximo! 🛑');
+                  setWonPrize(null);
+                  return;
+              }
+
+              // It's safe to claim this prize
+              /** @type {ClaimedPrize} */
+              const newClaimedPrize = {
+                sequenceIndex: currentNextAvailableIndex,
+                prizeId: winningPrize.id,
+                prizeName: winningPrize.name,
+                emoji: winningPrize.emoji,
+                userPhone: userPhone,
+                timestamp: new Date().toISOString(),
+              };
+
+              /** @type {GlobalPrizeState} */
+              const newStateForBin = {
+                ...latestState,
+                nextAvailableIndex: latestState.nextAvailableIndex + 1,
+                claimedPrizes: [...latestState.claimedPrizes, newClaimedPrize],
+              };
+
+              const updatedState = await updatePrizeState(newStateForBin);
+              setGlobalPrizeState(updatedState); // Update local state with the confirmed state
+              setWonPrize(winningPrize); // Show modal for the won prize
+            } catch (err) {
+              console.error("Erro ao reivindicar prêmio:", err);
+              setError(`Falha ao registrar seu prêmio: ${err.message || 'Erro desconhecido'}. Por favor, tente novamente.`);
+            } finally {
+              setIsSpinning(false);
             }
-          }, SPIN_DURATION_MS + 200);
-        }, [isSpinning, userPhone, usedPhones, currentIndex]);
+          }, SPIN_DURATION_MS + 200); // Allow a little extra time for animation to complete
+        }, [isSpinning, userPhone, globalPrizeState, showNotification, loadGlobalState]);
 
         const handleSpinClick = () => {
           if (isSpinning) return;
-          if (userPhone) {
-            startSpin();
-          } else {
+          if (isLoadingGlobalState) {
+              showNotification('Carregando dados da roleta, aguarde...');
+              return;
+          }
+          if (error) {
+              showNotification('Erro na roleta, por favor, recarregue a página.');
+              return;
+          }
+          if (!userPhone) {
             setIsPhoneModalOpen(true);
+          } else if (globalPrizeState && globalPrizeState.nextAvailableIndex >= globalPrizeState.originalPrizesSequence.length) {
+            showNotification('Todos os prêmios já foram reivindicados! 😥');
+          } else {
+            startSpin();
           }
         };
 
         const handleSavePhone = (phone) => {
           setUserPhone(phone);
           setIsPhoneModalOpen(false);
-          showNotification('Telefone salvo! Clique em "GIRAR" novamente.');
+          showNotification('Telefone salvo! Clique em "GIRAR" novamente para participar.');
         };
-        
+
+        const hasClaimedThisIndex = useCallback((phone) => {
+          if (!globalPrizeState || phone === ADMIN_PHONE) return false;
+          return globalPrizeState.claimedPrizes.some(
+            cp => cp.userPhone === phone && cp.sequenceIndex === globalPrizeState.nextAvailableIndex
+          );
+        }, [globalPrizeState]);
+
+
+        const disableSpinButton = isSpinning || isLoadingGlobalState || error !== null ||
+          (globalPrizeState && globalPrizeState.nextAvailableIndex >= globalPrizeState.originalPrizesSequence.length) ||
+          (userPhone && hasClaimedThisIndex(userPhone));
+
+
+        const spinButtonText = (() => {
+          if (isLoadingGlobalState) return 'Carregando...';
+          if (isSpinning) return 'Girando...';
+          if (error) return 'Erro! Recarregue';
+          if (!userPhone) return 'Informar Telefone';
+          if (globalPrizeState && globalPrizeState.nextAvailableIndex >= globalPrizeState.originalPrizesSequence.length) return 'Prêmios Esgotados';
+          if (userPhone && hasClaimedThisIndex(userPhone)) return 'Prêmio Reivindicado!';
+          return 'GIRAR';
+        })();
+
+
+        if (isLoadingGlobalState) {
+          return <LoadingOverlay message="Carregando a Roleta Premiada..." />;
+        }
+
+        if (error && !isLoadingGlobalState) {
+          return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-4 text-center">
+              <h1 className="text-4xl md:text-6xl font-bold text-red-500 mb-4">Erro Crítico</h1>
+              <p className="text-xl text-gray-300 mb-6">{error}</p>
+              <button
+                onClick={loadGlobalState}
+                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Tentar Recarregar
+              </button>
+              <p className="text-sm text-gray-500 mt-4">Verifique a configuração de JSONBIN_BIN_ID e JSONBIN_API_KEY no ambiente.</p>
+            </div>
+          );
+        }
+
         return (
           <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-4 overflow-hidden" style={{ background: 'radial-gradient(circle at center, #1c1c1c 0%, #080808 70%, #000000 100%)' }}>
             {notification && (
-              <div className="fixed top-5 bg-amber-500 text-black py-2 px-4 rounded-lg shadow-lg z-[60] animate-fade-in-down font-semibold">
+              <div className="fixed top-5 bg-amber-500 text-black py-2 px-4 rounded-lg shadow-lg z-[60] animate-fade-in-down font-semibold" role="status" aria-live="polite">
                 {notification}
               </div>
             )}
@@ -416,10 +734,13 @@
               <SpinnerWheel prizes={PRIZES} rotation={rotation} spinDuration={SPIN_DURATION_MS} />
             </main>
             <footer className="mt-8 text-center">
-              <button onClick={handleSpinClick} disabled={isSpinning} className="px-10 py-4 text-xl font-bold text-black bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full hover:from-amber-500 hover:to-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:ring-opacity-70 transition-all duration-300 ease-in-out disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transform hover:scale-105 disabled:scale-100" aria-label={isSpinning ? 'Girando a roleta' : 'Girar a roleta'} style={{boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.4), 0 0 0 3px #B91C1C, 0 0 0 6px #FFD700, 0 8px 20px rgba(255,215,0,0.22)'}}>
-                {isSpinning ? 'Girando...' : 'GIRAR'}
+              <button onClick={handleSpinClick} disabled={disableSpinButton} className="px-10 py-4 text-xl font-bold text-black bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full hover:from-amber-500 hover:to-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:ring-opacity-70 transition-all duration-300 ease-in-out disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transform hover:scale-105 disabled:scale-100" aria-label={isSpinning ? 'Girando a roleta' : 'Girar a roleta'} style={{boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.4), 0 0 0 3px #B91C1C, 0 0 0 6px #FFD700, 0 8px 20px rgba(255,215,0,0.22)'}}>
+                {spinButtonText}
               </button>
             </footer>
+            {globalPrizeState && globalPrizeState.claimedPrizes.length > 0 && (
+              <WinnersList claimedPrizes={globalPrizeState.claimedPrizes} />
+            )}
             <PrizeModal isOpen={!!wonPrize} prize={wonPrize} onClose={() => setWonPrize(null)} userPhone={userPhone} />
             <PhoneModal isOpen={isPhoneModalOpen} onClose={() => setIsPhoneModalOpen(false)} onSave={handleSavePhone} />
           </div>
@@ -429,6 +750,9 @@
 
       // --- RENDER THE APP ---
       const rootElement = document.getElementById('root');
+      if (!rootElement) {
+        throw new Error("Could not find root element to mount to");
+      }
       const root = ReactDOM.createRoot(rootElement);
       root.render(<App />);
 
